@@ -156,7 +156,7 @@ Option	Default	Description
 
 adapt the --wait setting to your computer performances
 
-python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --offset-start 0 --offset-end 100
+python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --offset-start 1 --offset-end 100
 
 → ~100 images in:
 
@@ -178,7 +178,7 @@ Voyager_064/300_450_3/
 
 adapt the --wait setting to your computer performances
 
-python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --fit-to-screen --width 400 --height 400 --offset-start 0 --offset-end 100
+python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --fit-to-screen --width 400 --height 400 --offset-start 1 --offset-end 100
 
 → ~100 images in:
 
