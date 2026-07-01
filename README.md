@@ -156,9 +156,7 @@ Option	Default	Description
 
 adapt the --wait setting to your computer performances
 
-python Voyager_ExplorationCapture.py \\
-  --token-id 64 --grainy --wait 15 --jpg \\
-  --offset-start 0 --offset-end 100
+python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --offset-start 0 --offset-end 100
 
 → ~100 images in:
 
@@ -168,9 +166,7 @@ Voyager_064/300_450_1/
 
 2. High-Resolution Export
 
-python Voyager_ExplorationCapture.py \\
-  --token-id 64 --offsets 31 109 113 \\
-  --dp 3 --jpg --jpg-quality 85
+python Voyager_ExplorationCapture.py --token-id 64 --offsets 31 109 113 --dp 3 --jpg --jpg-quality 85
 
 → Output:
 
@@ -182,10 +178,7 @@ Voyager_064/300_450_3/
 
 adapt the --wait setting to your computer performances
 
-python Voyager_ExplorationCapture.py \
-  --token-id 64 --grainy --wait 15 --jpg \
-  --fit-to-screen --width 400 --height 400 \
-  --offset-start 0 --offset-end 100
+python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --fit-to-screen --width 400 --height 400 --offset-start 0 --offset-end 100
 
 → ~100 images in:
 
@@ -195,10 +188,7 @@ Voyager_064/400_400_1/
 
 4. High-Resolution Export for specific display size
 
-python Voyager_ExplorationCapture.py \
-  --token-id 64 --offsets 31 109 113 \
-  --fit-to-screen --width 400 --height 400 \
-  --dp 3 --jpg --jpg-quality 85
+python Voyager_ExplorationCapture.py --token-id 64 --offsets 31 109 113 --fit-to-screen --width 400 --height 400 --dp 3 --jpg --jpg-quality 85
 
 → Output:
 
@@ -209,9 +199,7 @@ Voyager_064/400_400_3/
 
 5. Custom Output Folder
 
-python Voyager_ExplorationCapture.py \
-  --token-id 64 --offsets 12 55 \
-  --output-dir ~/Desktop/my_voyager
+python Voyager_ExplorationCapture.py --token-id 64 --offsets 12 55 --output-dir ~/Desktop/my_voyager
 
 ⸻
 
