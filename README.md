@@ -169,7 +169,7 @@ Voyager_064/300_450_1/
 2. High-Resolution Export
 
 python Voyager_ExplorationCapture.py \
-  --token-id 64 --offsets 4 37 89 \
+  --token-id 64 --offsets 31 109 113 \
   --dp 3 --jpg --jpg-quality 85
 
 → Output:
@@ -196,7 +196,7 @@ Voyager_064/400_400_1/
 4. High-Resolution Export for specific display size
 
 python Voyager_ExplorationCapture.py \
-  --token-id 64 --offsets 4 37 89 \
+  --token-id 64 --offsets 31 109 113 \
   --fit-to-screen --width 400 --height 400 \
   --dp 3 --jpg --jpg-quality 85
 
@@ -221,7 +221,7 @@ python Voyager_ExplorationCapture.py \
 2. Identify interesting offsets
 3. Export favourites in high resolution:
     * --offsets
-    * --dp 2 (or higher for high resolution prints)
+    * --dp 3 (or higher for high resolution prints)
 
 ⸻
 
