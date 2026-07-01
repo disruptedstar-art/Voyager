@@ -188,7 +188,7 @@ Voyager_064/400_400_1/
 
 4. High-Resolution Export for specific display size
 
-python Voyager_ExplorationCapture.py --token-id 64 --offsets 31 109 113 --fit-to-screen --width 400 --height 400 --dp 3 --jpg --jpg-quality 85
+python Voyager_ExplorationCapture.py --token-id 64 --offsets 22 26 --fit-to-screen --width 400 --height 400 --dp 3 --jpg --jpg-quality 85
 
 → Output:
 
