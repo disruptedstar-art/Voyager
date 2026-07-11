@@ -82,7 +82,7 @@ Voyager_064/
 
 * Renders a range of offsets
 * Fast, approximate renders
-* Ideal for discovering interesting regions
+* Ideal for discovering interesting offsets
 
 🖼 High-Resolution Mode
 
@@ -109,7 +109,7 @@ Option	Default	Description
 Exploration Sweep
 
 Option	Default	Description
---offset-start	0	First offset
+--offset-start	1	First offset
 --offset-end	100	Last offset (inclusive)
 --offset-step	1	Step size
 --wait	12	Seconds per frame (you must adapt it depending on your computer performances)
@@ -120,7 +120,7 @@ High-Resolution Mode
 
 Option	Default	Description
 --offsets	—	Explicit offsets list
---timeout	600	Max wait for full render
+--timeout	600s	Max wait for full render
 
 ⸻
 
@@ -162,6 +162,8 @@ python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --of
 
 Voyager_064/300_450_1/
 
+For the rare "Close encounter" that allow all objects to appear, I usually run 500 iterations...
+
 ⸻
 
 2. High-Resolution Export
@@ -184,6 +186,8 @@ python Voyager_ExplorationCapture.py --token-id 64 --grainy --wait 15 --jpg --fi
 
 Voyager_064/400_400_1/
 
+Adapt the ration to your setting, and for exploration keep it around 400 pixels (16:9 could be 480:270)
+
 ⸻
 
 4. High-Resolution Export for specific display size
@@ -194,6 +198,7 @@ python Voyager_ExplorationCapture.py --token-id 64 --offsets 22 26 --fit-to-scre
 
 Voyager_064/400_400_3/
 
+Keept the viewport size around 400 pixels and just increase dp...
 
 ⸻
 
@@ -228,6 +233,10 @@ Performance
 
 * High-resolution renders can take 60–120 seconds (or much larger for large DP, proceed step by step, until you find the good resolution)
 * The script reuses a single browser instance (faster)
+
+Batch
+
+* I usually run the script during night or doing something else, so the rendering time is not very important...
 
 ⸻
 
