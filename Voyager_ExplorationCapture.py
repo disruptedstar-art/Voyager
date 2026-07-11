@@ -125,7 +125,7 @@ async def capture_hires(page, offset: int):
                     pct  = await console_args[1].json_value()
                     secs = await console_args[2].json_value()
                     print(f"     {pct} % ({secs} s)")
-                    if int(pct) == 100:
+                    if int(pct) == 100 or int(pct) == 99: # sometimes 100 does not appear, do not know why
                         done.set()
                 except Exception:
                     pass
