@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import argparse
 import base64
 from PIL import Image
@@ -17,6 +18,11 @@ parser.add_argument("--offset-end",    type=int, default=100)
 parser.add_argument("--offset-step",   type=int, default=1)
 parser.add_argument("--offsets",       type=int, nargs="+", default=None,
                     help="Explicit list of offsets — waits for 100%% completion before saving")
+parser.add_argument("--from-dir",      default=None,
+                    help="Directory of curated offset_XXXXX.png/.jpg files (e.g. after pruning a "
+                         "sweep) — offsets are extracted from the filenames and captured the same "
+                         "way as --offsets, saved to the standard Voyager_<id>/<w>_<h>_<dp> output "
+                         "dir (or --output-dir if given). Mutually exclusive with --offsets.")
 parser.add_argument("--wait",          type=float, default=12.0,
                     help="Seconds to wait for render in sweep mode (default: 12)")
 parser.add_argument("--timeout",       type=float, default=600.0,
@@ -42,6 +48,34 @@ args = parser.parse_args()
 
 if not (0 <= args.token_id <= 300):
     parser.error("--token-id must be a Voyager edition number between 0 and 300")
+
+if args.offsets is not None and args.from_dir is not None:
+    parser.error("--offsets and --from-dir are mutually exclusive")
+
+
+def extract_offsets_from_dir(directory: str) -> list[int]:
+    """Scan `directory` for offset_XXXXX.(png|jpg|jpeg) files and return the sorted,
+    de-duplicated list of offsets found in the filenames."""
+    if not os.path.isdir(directory):
+        parser.error(f"--from-dir '{directory}' is not a directory")
+
+    pattern = re.compile(r"^offset_(\d+)\.(png|jpe?g)$", re.IGNORECASE)
+    offsets = set()
+    for fname in os.listdir(directory):
+        m = pattern.match(fname)
+        if m:
+            offsets.add(int(m.group(1)))
+
+    if not offsets:
+        parser.error(f"No offset_XXXXX.png/.jpg files found in '{directory}'")
+
+    return sorted(offsets)
+
+
+if args.from_dir is not None:
+    args.offsets = extract_offsets_from_dir(args.from_dir)
+    print(f"Extracted {len(args.offsets)} offsets from '{args.from_dir}': {args.offsets}")
+
 
 FULL_TOKEN_ID = f"434000{args.token_id:03d}"
 
