@@ -207,6 +207,12 @@ Adapt the ration to your setting, and for exploration keep it around 400 pixels 
 
 4. High-Resolution Export for specific display size
 
+From Exploration directory (after selection) :
+
+python Voyager_ExplorationCapture.py --token-id 64 --from-dir Voyager_064/400_400_1 --fit-to-screen --width 400 --height 400 --dp 3 --jpg --jpg-quality 85
+
+or (for specific offsets) :
+
 python Voyager_ExplorationCapture.py --token-id 64 --offsets 22 26 --fit-to-screen --width 400 --height 400 --dp 3 --jpg --jpg-quality 85
 
 → Output:
