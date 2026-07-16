@@ -1,6 +1,7 @@
 # Voyager
-Series of scripts to be used to extract the best of your Voyager iterations (artblocks collection)
-Voyager Capture
+Python script to be used to extract the best of your Voyager iterations (artblocks collection)
+
+Voyager Exploration Capture
 
 Exploration & High-Resolution Export Tool
 
