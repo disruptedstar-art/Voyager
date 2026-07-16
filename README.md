@@ -120,6 +120,7 @@ High-Resolution Mode
 
 Option	Default	Description
 --offsets	—	Explicit offsets list
+--from-dir - Extract the remaining offsets in an exploration directory (after deleteing unwanted offsets)
 --timeout	600s	Max wait for full render
 
 ⸻
@@ -166,7 +167,22 @@ For the rare "Close encounter" that allow all objects to appear, I usually run 5
 
 ⸻
 
-2. High-Resolution Export
+2a. High-Resolution Export from Exploration Directory
+
+After a sweep, prune the exploration directory down to the offsets you actually like (just delete the ones you don't want).
+Point the script at that directory with --from-dir: it reads the remaining offset_XXXXX.png/.jpg filenames, extracts the offsets, and re-captures only those in high quality — waiting for each render to hit 100% completion instead of using a fixed wait time.
+
+python Voyager_ExplorationCapture.py --token-id 64 --from-dir Voyager_064/300_450_1 --dp 3 --jpg --jpg-quality 85
+
+→ Output:
+
+Voyager_064/300_450_3/
+
+Note: the output directory is derived from --width/--height/--dp (or --output-dir if you pass one) — it's independent from --from-dir, so your curated exploration directory is never touched or overwritten. --from-dir and --offsets are mutually exclusive.
+
+⸻
+
+2b. High-Resolution Export from Offsets
 
 python Voyager_ExplorationCapture.py --token-id 64 --offsets 31 109 113 --dp 3 --jpg --jpg-quality 85
 
@@ -175,7 +191,6 @@ python Voyager_ExplorationCapture.py --token-id 64 --offsets 31 109 113 --dp 3 -
 Voyager_064/300_450_3/
 
 ⸻
-
 3. Quick Exploration (Edition 64) for specific display size
 
 adapt the --wait setting to your computer performances
