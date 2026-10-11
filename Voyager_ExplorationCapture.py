@@ -10,7 +10,7 @@ from playwright.async_api import async_playwright
 parser = argparse.ArgumentParser(description="Capture Voyager ArtBlocks offsets")
 
 parser.add_argument("--token-id",      type=int, default=0,
-                    help="Voyager edition number, 0-300 (e.g. 64 → project token 434000064)")
+                    help="Voyager edition number, 0-299 (e.g. 64 → project token 434000064)")
 parser.add_argument("--contract",      default="0x99a9b7c1116f9ceeb1652de04d5969cce509b069")
 parser.add_argument("--chain",         default="1")
 parser.add_argument("--offset-start",  type=int, default=0)
@@ -19,12 +19,13 @@ parser.add_argument("--offset-step",   type=int, default=1)
 parser.add_argument("--offsets",       type=int, nargs="+", default=None,
                     help="Explicit list of offsets — waits for 100%% completion before saving")
 parser.add_argument("--from-dir",      default=None,
-                    help="Directory of curated offset_XXXXX.png/.jpg files (e.g. after pruning a "
+                    help="Directory of curated offset_XXXXX.png/.jpg/.webp files (e.g. after pruning a "
                          "sweep) — offsets are extracted from the filenames and captured the same "
                          "way as --offsets, saved to the standard Voyager_<id>/<w>_<h>_<dp> output "
                          "dir (or --output-dir if given). Mutually exclusive with --offsets.")
 parser.add_argument("--wait",          type=float, default=12.0,
-                    help="Seconds to wait for render in sweep mode (default: 12)")
+                    help="Max seconds to wait for render in sweep mode; capture happens "
+                         "earlier if the artwork reports completion (default: 12)")
 parser.add_argument("--timeout",       type=float, default=600.0,
                     help="Max seconds to wait for 100%% completion in explicit mode (default: 600)")
 parser.add_argument("--output-dir",    default=None,
@@ -43,23 +44,43 @@ parser.add_argument("--jpg",           action="store_true",
                     help="Convert captured PNGs to JPG and remove the PNG (smaller files)")
 parser.add_argument("--jpg-quality",   type=int, default=90,
                     help="JPG compression quality 1-95 (default: 90)")
+parser.add_argument("--webp",          action="store_true",
+                    help="Convert captured PNGs to WebP and remove the PNG (smaller files)")
+parser.add_argument("--webp-quality",  type=int, default=80,
+                    help="WebP compression quality 0-100 (default: 80, visually close to "
+                         "JPG 90 and noticeably smaller)")
+
+parser.add_argument("--overwrite",     action="store_true",
+                    help="Recapture offsets whose output file already exists "
+                         "(by default they are skipped, so an interrupted run can be resumed)")
+parser.add_argument("--retries",       type=int, default=2,
+                    help="Extra attempts per offset after an error before moving on (default: 2)")
+parser.add_argument("--nav-timeout",   type=float, default=60.0,
+                    help="Max seconds to wait for the page to load (default: 60)")
+parser.add_argument("--workers",       type=int, default=1,
+                    help="Number of offsets captured in parallel, one browser tab each (default: 1)")
 
 args = parser.parse_args()
 
-if not (0 <= args.token_id <= 300):
-    parser.error("--token-id must be a Voyager edition number between 0 and 300")
+if not (0 <= args.token_id <= 299):
+    parser.error("--token-id must be a Voyager edition number between 0 and 299")
+
+if args.jpg and args.webp:
+    parser.error("--jpg and --webp are mutually exclusive")
 
 if args.offsets is not None and args.from_dir is not None:
     parser.error("--offsets and --from-dir are mutually exclusive")
 
 
 def extract_offsets_from_dir(directory: str) -> list[int]:
-    """Scan `directory` for offset_XXXXX.(png|jpg|jpeg) files and return the sorted,
+    """Scan `directory` for offset_XXXXX.(png|jpg|jpeg|webp) or
+    Voyager_NNN_offset_XXXXX_DPY.(png|jpg|jpeg|webp) files and return the sorted,
     de-duplicated list of offsets found in the filenames."""
     if not os.path.isdir(directory):
         parser.error(f"--from-dir '{directory}' is not a directory")
 
-    pattern = re.compile(r"^offset_(\d+)\.(png|jpe?g)$", re.IGNORECASE)
+    pattern = re.compile(r"^(?:Voyager_\d+_)?offset_(\d+)(?:_DP\d+)?\.(png|jpe?g|webp)$",
+                         re.IGNORECASE)
     offsets = set()
     for fname in os.listdir(directory):
         m = pattern.match(fname)
@@ -67,7 +88,7 @@ def extract_offsets_from_dir(directory: str) -> list[int]:
             offsets.add(int(m.group(1)))
 
     if not offsets:
-        parser.error(f"No offset_XXXXX.png/.jpg files found in '{directory}'")
+        parser.error(f"No offset_XXXXX.png/.jpg/.webp files found in '{directory}'")
 
     return sorted(offsets)
 
@@ -75,7 +96,6 @@ def extract_offsets_from_dir(directory: str) -> list[int]:
 if args.from_dir is not None:
     args.offsets = extract_offsets_from_dir(args.from_dir)
     print(f"Extracted {len(args.offsets)} offsets from '{args.from_dir}': {args.offsets}")
-
 
 FULL_TOKEN_ID = f"434000{args.token_id:03d}"
 
@@ -98,20 +118,39 @@ def build_url(offset: int) -> str:
     return BASE_URL + "?" + "&".join(params)
 
 
-def png_to_jpg(png_path: str):
-    """Convert a PNG to JPG, remove the PNG."""
-    jpg_path = os.path.splitext(png_path)[0] + ".jpg"
+OUT_EXT = "jpg" if args.jpg else "webp" if args.webp else "png"
+
+
+def output_stem(offset: int) -> str:
+    return os.path.join(
+        OUTPUT_DIR, f"Voyager_{args.token_id:03d}_offset_{offset:05d}_DP{args.dp}"
+    )
+
+
+def already_captured(offset: int) -> bool:
+    return os.path.exists(f"{output_stem(offset)}.{OUT_EXT}")
+
+
+def convert_png(png_path: str, offset: int):
+    """Convert a PNG to JPG/WebP, remove the PNG. Written to a temp file first so an
+    interrupted run never leaves a truncated image that would be skipped on resume."""
+    out_path = f"{output_stem(offset)}.{OUT_EXT}"
+    tmp_path = out_path + ".part"
     with Image.open(png_path) as img:
         rgb = img.convert("RGB")  # drop alpha channel if any
-        rgb.save(jpg_path, "JPEG", quality=args.jpg_quality, optimize=True)
+        if args.jpg:
+            rgb.save(tmp_path, "JPEG", quality=args.jpg_quality, optimize=True)
+        else:
+            rgb.save(tmp_path, "WEBP", quality=args.webp_quality, method=6)
+    os.replace(tmp_path, out_path)
     os.remove(png_path)
-    png_kb  = 0  # already deleted, size was checked before
-    jpg_kb  = os.path.getsize(jpg_path) / 1024
-    print(f"     ✓ → {jpg_path} ({jpg_kb:.0f} KB)")
+    out_kb = os.path.getsize(out_path) / 1024
+    print(f"  [{offset:05d}] ✓ → {out_path} ({out_kb:.0f} KB)")
 
 
 async def capture_and_save(page, offset: int):
-    png_path = os.path.join(OUTPUT_DIR, f"offset_{offset:05d}.png")
+    png_path = f"{output_stem(offset)}.png"
+    tmp_path = png_path + ".part"
 
     saved = await page.evaluate("""() => {
         const canvas = document.querySelector('canvas');
@@ -122,32 +161,23 @@ async def capture_and_save(page, offset: int):
     if saved:
         data = saved.split(",", 1)[1]
         raw = base64.b64decode(data)
-        with open(png_path, "wb") as f:
+        with open(tmp_path, "wb") as f:
             f.write(raw)
+        os.replace(tmp_path, png_path)
         png_kb = len(raw) / 1024
-        if args.jpg:
-            print(f"     ✓ Canvas export → {png_path} ({png_kb:.0f} KB) — converting…")
-            png_to_jpg(png_path)
-        else:
-            print(f"     ✓ Canvas export → {png_path} ({png_kb:.0f} KB)")
+        print(f"  [{offset:05d}] ✓ Canvas export → {png_path} ({png_kb:.0f} KB)")
     else:
-        await page.screenshot(path=png_path, full_page=True)
-        print(f"     ✓ Screenshot fallback → {png_path}")
-        if args.jpg:
-            png_to_jpg(png_path)
+        await page.screenshot(path=tmp_path, full_page=True, type="png")
+        os.replace(tmp_path, png_path)
+        print(f"  [{offset:05d}] ✓ Screenshot fallback → {png_path}")
+
+    if args.jpg or args.webp:
+        convert_png(png_path, offset)
 
 
-async def capture_sweep(page, offset: int):
-    """Fixed wait — don't care if render is complete."""
-    url = build_url(offset)
-    print(f"  → {url}")
-    await page.goto(url)
-    await page.wait_for_timeout(int(args.wait * 1000))
-    await capture_and_save(page, offset)
-
-
-async def capture_hires(page, offset: int):
-    """Wait for the 100% completion line in the browser console."""
+async def render_and_capture(page, offset: int, max_wait: float, show_progress: bool):
+    """Load the offset and capture as soon as the artwork reports completion in the
+    browser console, or after `max_wait` seconds, whichever comes first."""
     done = asyncio.Event()
 
     def on_console(msg):
@@ -158,28 +188,78 @@ async def capture_hires(page, offset: int):
                 try:
                     pct  = await console_args[1].json_value()
                     secs = await console_args[2].json_value()
-                    print(f"     {pct} % ({secs} s)")
-                    if int(pct) == 100 or int(pct) == 99: # sometimes 100 does not appear, do not know why
+                    if show_progress:
+                        print(f"  [{offset:05d}] {pct} % ({secs} s)")
+                    if int(pct) == 100 or int(pct) == 99:
                         done.set()
                 except Exception:
                     pass
             asyncio.create_task(check())
 
     page.on("console", on_console)
-
-    url = build_url(offset)
-    print(f"  → {url}")
-    await page.goto(url)
-
     try:
-        await asyncio.wait_for(done.wait(), timeout=args.timeout)
-        print(f"     ✓ Render complete")
-    except asyncio.TimeoutError:
-        print(f"     ⚠ Timeout after {args.timeout}s — saving whatever is rendered")
+        url = build_url(offset)
+        print(f"  [{offset:05d}] → {url}")
+        await page.goto(url, timeout=args.nav_timeout * 1000)
+        start = asyncio.get_running_loop().time()
 
-    page.remove_listener("console", on_console)
+        try:
+            await asyncio.wait_for(done.wait(), timeout=max_wait)
+            elapsed = asyncio.get_running_loop().time() - start
+            print(f"  [{offset:05d}] ✓ Render complete after {elapsed:.1f}s")
+        except asyncio.TimeoutError:
+            print(f"  [{offset:05d}] ⚠ Not complete after {max_wait}s — saving whatever is rendered")
+    finally:
+        page.remove_listener("console", on_console)
+
     await page.wait_for_timeout(500)
     await capture_and_save(page, offset)
+
+
+async def capture_sweep(page, offset: int):
+    """Capture when the render completes, or after --wait seconds at most."""
+    await render_and_capture(page, offset, args.wait, show_progress=False)
+
+
+async def capture_hires(page, offset: int):
+    """Capture when the render completes, or after --timeout seconds at most."""
+    await render_and_capture(page, offset, args.timeout, show_progress=True)
+
+
+async def new_page(browser):
+    context = await browser.new_context(
+        viewport={"width": args.width, "height": args.height},
+        device_scale_factor=1,
+    )
+    return context, await context.new_page()
+
+
+async def worker(browser, queue: asyncio.Queue, capture, failed: list):
+    """Pull offsets from the queue until empty. Each offset gets 1 + --retries attempts;
+    after a failure the page is recreated (it may have crashed) and the next offset
+    is processed instead of aborting the whole run."""
+    context, page = await new_page(browser)
+    while True:
+        try:
+            offset = queue.get_nowait()
+        except asyncio.QueueEmpty:
+            break
+        attempts = args.retries + 1
+        for attempt in range(1, attempts + 1):
+            try:
+                await capture(page, offset)
+                break
+            except Exception as e:
+                reason = str(e).strip().splitlines()[0] if str(e).strip() else type(e).__name__
+                print(f"  [{offset:05d}] ✗ Attempt {attempt}/{attempts} failed: {reason}")
+                try:
+                    await context.close()
+                except Exception:
+                    pass
+                context, page = await new_page(browser)
+        else:
+            failed.append(offset)
+    await context.close()
 
 
 async def main():
@@ -188,40 +268,59 @@ async def main():
     if args.offsets is not None:
         offsets = args.offsets
         mode = f"explicit list {offsets} — waiting for 100% completion"
+        capture = capture_hires
     else:
         offsets = list(range(args.offset_start, args.offset_end + 1, args.offset_step))
-        mode = f"sweep {args.offset_start}→{args.offset_end} step {args.offset_step} — fixed {args.wait}s wait"
+        mode = f"sweep {args.offset_start}→{args.offset_end} step {args.offset_step} — capture on completion, max {args.wait}s"
+        capture = capture_sweep
 
     flags = []
     if args.fit_to_screen: flags.append("fitToScreen=true")
     if args.grainy:        flags.append("grainy=true")
     flags.append(f"DP={args.dp}")
 
-    fmt = f"JPG (quality {args.jpg_quality})" if args.jpg else "PNG"
+    if args.jpg:
+        fmt = f"JPG (quality {args.jpg_quality})"
+    elif args.webp:
+        fmt = f"WebP (quality {args.webp_quality})"
+    else:
+        fmt = "PNG"
 
     print(f"Voyager #{args.token_id} (token {FULL_TOKEN_ID})")
     print(f"Capturing {len(offsets)} offsets | {mode} | "
           f"{args.width}×{args.height}px | {' '.join(flags)} | {fmt}"
           f" → '{OUTPUT_DIR}/'")
 
+    if args.overwrite:
+        todo = offsets
+    else:
+        todo = [o for o in offsets if not already_captured(o)]
+        skipped = len(offsets) - len(todo)
+        if skipped:
+            print(f"Skipping {skipped} offsets already captured (use --overwrite to redo them)")
+
+    if not todo:
+        print("\nNothing to do — all offsets already captured.")
+        return
+
+    queue = asyncio.Queue()
+    for o in todo:
+        queue.put_nowait(o)
+    n_workers = max(1, min(args.workers, len(todo)))
+    print(f"{len(todo)} offsets to capture with {n_workers} worker(s)\n")
+
+    failed = []
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            viewport={"width": args.width, "height": args.height},
-            device_scale_factor=1,
-        )
-        page = await context.new_page()
-
-        if args.offsets is not None:
-            for offset in offsets:
-                await capture_hires(page, offset)
-        else:
-            for offset in offsets:
-                await capture_sweep(page, offset)
-
+        await asyncio.gather(*(worker(browser, queue, capture, failed)
+                               for _ in range(n_workers)))
         await browser.close()
 
-    print(f"\nDone! {len(offsets)} images saved to '{OUTPUT_DIR}/'")
+    print(f"\nDone! {len(todo) - len(failed)}/{len(todo)} images saved to '{OUTPUT_DIR}/'")
+    if failed:
+        failed.sort()
+        print(f"⚠ {len(failed)} offsets failed: {' '.join(map(str, failed))}")
+        print("  Re-run the same command to retry them (captured offsets are skipped).")
 
 
 asyncio.run(main())
